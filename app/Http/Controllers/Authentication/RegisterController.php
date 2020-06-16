@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers\Authentication;
 
-use Carbon\Carbon;
-use App\Model\Account;
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Model\Client;
+use App\Model\Company;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -19,13 +20,14 @@ class RegisterController extends Controller
             'last_name' => 'required|string',
             'email' => 'required|string|email',
             'password' => 'required|string',
+            'type' => 'required|string',
         ]);
 
-        $inputValues = $request->only(['email', 'password', 'first_name', 'last_name']);
+        $inputValues = $request->only(['email', 'password', 'type', 'first_name', 'last_name']);
 
         // Check if email is unique
 
-        $uniqueEmail = Account::where('email', $inputValues['email'])->get()->count();
+        $uniqueEmail = ($inputValues['type'] == 'client') ? Client::where('email', $inputValues['email'])->get()->count() : Company::where('email', $inputValues['email'])->get()->count();
 
         if ($uniqueEmail != 0) {
             return response([
@@ -34,7 +36,7 @@ class RegisterController extends Controller
             ], Response::HTTP_FORBIDDEN);
         }
 
-        $account = new Account;
+        $account = ($inputValues['type'] == 'client') ? new Client : new Company;
         $account->first_name = $inputValues['first_name'];
         $account->last_name = $inputValues['last_name'];
         $account->email = strtolower($inputValues['email']);
@@ -49,16 +51,17 @@ class RegisterController extends Controller
         if (!$autoLogin['success']) {
             return response()->json([
                 'success' => false,
-                'error' => 'Email or Password doesn\'t exist'
+                'error' => 'Email or Password doesn\'t exist',
             ], 401);
         }
 
+        unset($autoLogin['success']);
         return response([
             'success' => true,
             'data' => [
-                'msg' => "Welcome to TowMe",
-                'session' => $autoLogin
-            ]
+                'msg' => "Welcome to TowMe ".$inputValues['first_name'],
+                'session' => $autoLogin,
+            ],
         ], Response::HTTP_CREATED);
 
     }
@@ -86,13 +89,13 @@ class RegisterController extends Controller
 
         return [
             'success' => true,
-            'access_token' => $tokenResult->accessToken,
-            'token_type' => 'Bearer',
+            'accessToken' => $tokenResult->accessToken,
             'expires_at' => Carbon::parse(
                 $tokenResult->token->expires_at
             )->toDateTimeString(),
             'user' => [
                 'identity' => $user_details->id,
+                'type' => strtolower($request->type),
                 'first_name' => $user_details->first_name,
                 'last_name' => $user_details->last_name,
                 'email' => $user_details->email,
